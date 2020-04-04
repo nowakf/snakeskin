@@ -1,0 +1,60 @@
+
+//take a piece of the image,
+fn filter_stack(stack: &[DynamicImage]) -> GrayImage {
+    let (minw, minh) = min_bounding_box(stack);
+    let (w, h) = (10u32, 10u32);
+    let mut total_entropy = 0f32;
+    ImageBuffer::from_fn(minw, minh, |x, y| {
+        let mut val = 0f32;
+        for im in stack {
+            if !im.in_bounds(x, y) {
+                continue
+            }
+            let image::Rgba([r, g, b, mut a]) = im.get_pixel(x, y);
+            let (ix, iy, iw, ih, iminw, iminh) = (x as i32, y as i32, w as i32, h as i32, minw as i32, minh as i32);
+
+            let lb = max(0, ix - iw / 2) as u32;
+            let tb = max(0, iy - ih / 2) as u32;
+            let w = min(iw, iminw - ix) as u32;
+            let h = max(ih, iminh - iy) as u32;
+
+            let entropy = entropy(&im.view(lb, tb, w, h));
+
+            let mut a = a as f32;
+
+            a *= entropy;
+            total_entropy += entropy;
+
+            val +=  a;
+        }
+        image::Luma([(val / total_entropy) as u8])
+    })
+}
+
+fn histogram(image: &SubImage<&DynamicImage>) -> Vec<u32> {
+    let mut bins = vec![0u32; 256];
+    for pixel in image.pixels() {
+        let image::Rgba([r, g, b, a]) = pixel.2;
+        bins[r as usize] += 1;
+    }
+    bins
+}
+
+fn entropy_val(histogram: &[u32], image_area: u32) -> f32 {
+    histogram.iter().fold(0f32, |sum, &val| {
+        let (size, val) = (image_area as f32, val as f32);
+        if val > 0.0 {
+            let w = ((val / size) * (val/size).ln());
+            sum - w
+        } else {
+            sum
+        }
+    }) / image_area as f32
+}
+
+fn entropy(image: &SubImage<&DynamicImage>) -> f32 {
+    let eval = entropy_val(&histogram(image), image.width() * image.height());
+    //println!("{} eval",eval);
+    //entropy_val(&histogram(image), image.width() * image.height())
+    eval
+}
