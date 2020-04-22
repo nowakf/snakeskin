@@ -7,6 +7,9 @@ use std::cmp::min;
 
 mod samplers;
 
+
+//Stack is just a stack of images
+//concatenated into a single array
 struct Stack {
     w: u32,
     h: u32,
@@ -34,6 +37,7 @@ fn load_images<P: AsRef<Path>>(path: P) -> Result<Vec<GrayImage>> {
 
     Ok(images)
 }
+
 fn merge(stack: Vec<GrayImage>) -> Stack {
     let mut w = std::u32::MAX;
     let mut h = std::u32::MAX;
@@ -51,7 +55,8 @@ fn merge(stack: Vec<GrayImage>) -> Stack {
     Stack{w, h, buffer}
 }
 
-
+//this returns an entropy weighted average for a given pixel, using the 'sample' function
+//to compute the 'neighborhood'
 fn entropy(stack: &Stack, sample: Box<dyn Fn(&Stack, Rect) -> Vec<u32>>, index: u32, quality: u32) -> f32
 {
     let bounds = samplers::bounded_block(stack, index, quality);
@@ -66,6 +71,7 @@ fn entropy(stack: &Stack, sample: Box<dyn Fn(&Stack, Rect) -> Vec<u32>>, index: 
     })
 }
 
+//this applies a function to the entire stack
 fn filter_stack(stack: &Stack, quality: u32) -> Vec<u8> {
     let mut luma = vec![(0f32, 0f32); (stack.w * stack.h) as usize];
     for (i, &pixel) in stack.buffer.iter().enumerate() {
@@ -77,12 +83,17 @@ fn filter_stack(stack: &Stack, quality: u32) -> Vec<u8> {
     luma.iter().map(|(pixel, total_entropy)| (pixel / total_entropy * 255.0) as u8).collect()
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<()> {Q
+    //parse command-line arguments
     let args : Vec<String> = std::env::args().collect();
     let quality : u32 = args.get(1).unwrap_or(&"3".to_string()).parse()?;
+    //load images from folder
     let images = load_images("./images")?;
+    //concatenate
     let stack = merge(images);
+    //apply the transformation
     let out = filter_stack(&stack, quality);
+    //output with the date in the name - so it doesn't overwrite previous files
     let date = chrono::Utc::now().format("%I-%M-%S-%d-%b-%Y");
     image::save_buffer(format!("./out/out_{}.png", date), &out, stack.w, stack.h, image::ColorType::L8).unwrap();
     Ok(())
